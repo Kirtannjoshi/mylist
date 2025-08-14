@@ -8,6 +8,7 @@ import Chip from '@mui/material/Chip';
 import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
+import Paper from '@mui/material/Paper';
 import MediaCard from './MediaCard';
 import MasonryGrid from './MasonryGrid';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
@@ -16,6 +17,11 @@ import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import PlayCircleIcon from '@mui/icons-material/PlayCircle';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import StarIcon from '@mui/icons-material/Star';
+import PendingIcon from '@mui/icons-material/Pending';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import PauseCircleIcon from '@mui/icons-material/PauseCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import { getPersonalizedRecommendations } from '../utils/recommendations';
@@ -53,11 +59,51 @@ const trendingContent = [
 ];
 
 const statusCategories = [
-  { key: 'thinking-to-watch', label: 'Plan to Watch', icon: '📝', color: 'secondary' },
-  { key: 'in-progress', label: 'Currently Watching', icon: '▶️', color: 'primary' },
-  { key: 'on-hold', label: 'On Hold', icon: '⏸️', color: 'warning' },
-  { key: 'completed', label: 'Completed', icon: '✅', color: 'success' },
-  { key: 'dropped', label: 'Dropped', icon: '❌', color: 'error' }
+  { 
+    key: 'thinking-to-watch', 
+    label: 'Plan to Watch', 
+    shortLabel: 'Plan to Watch',
+    icon: PendingIcon, 
+    color: 'info',
+    gradient: 'linear-gradient(135deg, #2196F3 0%, #21CBF3 100%)',
+    description: 'Movies and shows you want to watch'
+  },
+  { 
+    key: 'in-progress', 
+    label: 'Currently Watching', 
+    shortLabel: 'Watching',
+    icon: PlayArrowIcon, 
+    color: 'primary',
+    gradient: 'linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%)',
+    description: 'Currently enjoying these titles'
+  },
+  { 
+    key: 'on-hold', 
+    label: 'On Hold', 
+    shortLabel: 'On Hold',
+    icon: PauseCircleIcon, 
+    color: 'warning',
+    gradient: 'linear-gradient(135deg, #FFB74D 0%, #FFA726 100%)',
+    description: 'Paused for later'
+  },
+  { 
+    key: 'completed', 
+    label: 'Completed', 
+    shortLabel: 'Completed',
+    icon: CheckCircleIcon, 
+    color: 'success',
+    gradient: 'linear-gradient(135deg, #66BB6A 0%, #4CAF50 100%)',
+    description: 'Finished and enjoyed'
+  },
+  { 
+    key: 'dropped', 
+    label: 'Dropped', 
+    shortLabel: 'Dropped',
+    icon: CancelIcon, 
+    color: 'error',
+    gradient: 'linear-gradient(135deg, #EF5350 0%, #E53935 100%)',
+    description: 'Not continuing'
+  }
 ];
 
 export default function EntertainmentPage({ 
@@ -150,45 +196,199 @@ export default function EntertainmentPage({
         </CardContent>
       </Card>
 
-      {/* Status Overview Cards */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h5" sx={{ fontWeight: 600, mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
-          <PlayCircleIcon color="primary" />
+      {/* Modern Status Filter Section */}
+      <Paper elevation={0} sx={{ 
+        mb: 4, 
+        p: 3,
+        background: 'linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)',
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: '16px',
+        backdropFilter: 'blur(20px)'
+      }}>
+        <Typography 
+          variant="h5" 
+          sx={{ 
+            fontWeight: 700, 
+            mb: 3, 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1.5,
+            background: 'linear-gradient(135deg, #FF6B6B 0%, #4ECDC4 100%)',
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            fontSize: { xs: '1.5rem', sm: '1.75rem' }
+          }}
+        >
+          <PlayCircleIcon sx={{ color: 'primary.main', fontSize: { xs: 28, sm: 32 } }} />
           Your Collection
         </Typography>
-        <Grid container spacing={2}>
-          {statusCategories.map((category) => (
-            <Grid item xs={12} sm={6} lg={3} key={category.key}>
-              <Card 
-                sx={{ 
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  border: statusFilter === category.key ? '2px solid' : '1px solid',
-                  borderColor: statusFilter === category.key ? `${category.color}.main` : 'divider',
-                  bgcolor: statusFilter === category.key ? `${category.color}.50` : 'background.paper',
-                  '&:hover': { 
-                    transform: 'translateY(-2px)', 
-                    boxShadow: '0 8px 25px rgba(0,0,0,0.15)' 
-                  }
-                }}
-                onClick={() => onFilterChange(category.key)}
-              >
-                <CardContent sx={{ textAlign: 'center', py: 3 }}>
-                  <Typography variant="h3" sx={{ mb: 1, opacity: 0.8 }}>
-                    {category.icon}
-                  </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 700, mb: 1, color: `${category.color}.main` }}>
-                    {statusCounts[category.key]}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {category.label}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
+
+        {/* Enhanced Status Cards Grid */}
+        <Grid container spacing={3}>
+          {statusCategories.map((category) => {
+            const IconComponent = category.icon;
+            const isSelected = statusFilter === category.key;
+            const count = statusCounts[category.key];
+            
+            return (
+              <Grid item xs={6} sm={4} lg={2.4} key={category.key}>
+                <Card 
+                  sx={{ 
+                    cursor: 'pointer',
+                    position: 'relative',
+                    height: '140px',
+                    transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                    border: isSelected ? '2px solid' : '1px solid',
+                    borderColor: isSelected ? `${category.color}.main` : 'rgba(255,255,255,0.1)',
+                    borderRadius: '16px',
+                    background: isSelected 
+                      ? category.gradient
+                      : 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%)',
+                    backdropFilter: 'blur(20px)',
+                    overflow: 'hidden',
+                    '&:hover': { 
+                      transform: 'translateY(-8px) scale(1.02)',
+                      boxShadow: isSelected 
+                        ? `0 20px 40px rgba(0,0,0,0.3), 0 0 0 1px ${category.color}.main`
+                        : '0 20px 40px rgba(0,0,0,0.2)',
+                      '& .status-icon': {
+                        transform: 'scale(1.2) rotate(5deg)',
+                      },
+                      '& .status-count': {
+                        transform: 'scale(1.1)',
+                      }
+                    },
+                    '&:active': {
+                      transform: 'translateY(-4px) scale(0.98)',
+                    }
+                  }}
+                  onClick={() => onFilterChange(category.key)}
+                >
+                  {/* Glass morphism background effect */}
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      background: isSelected 
+                        ? 'rgba(255,255,255,0.2)' 
+                        : 'rgba(255,255,255,0.05)',
+                      backdropFilter: 'blur(10px)',
+                    }}
+                  />
+                  
+                  {/* Selection indicator */}
+                  {isSelected && (
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        top: 12,
+                        right: 12,
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        bgcolor: 'rgba(255,255,255,0.9)',
+                        boxShadow: '0 0 10px rgba(255,255,255,0.5)',
+                        animation: 'pulse 2s infinite',
+                        '@keyframes pulse': {
+                          '0%': { transform: 'scale(1)', opacity: 1 },
+                          '50%': { transform: 'scale(1.2)', opacity: 0.7 },
+                          '100%': { transform: 'scale(1)', opacity: 1 },
+                        }
+                      }}
+                    />
+                  )}
+
+                  <CardContent sx={{ 
+                    position: 'relative',
+                    textAlign: 'center', 
+                    p: 2,
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: 1
+                  }}>
+                    {/* Icon */}
+                    <IconComponent 
+                      className="status-icon"
+                      sx={{ 
+                        fontSize: { xs: 32, sm: 36 },
+                        color: isSelected ? 'rgba(255,255,255,0.95)' : `${category.color}.main`,
+                        transition: 'all 0.3s ease',
+                        filter: isSelected ? 'drop-shadow(0 2px 8px rgba(0,0,0,0.3))' : 'none'
+                      }} 
+                    />
+                    
+                    {/* Count */}
+                    <Typography 
+                      variant="h4" 
+                      className="status-count"
+                      sx={{ 
+                        fontWeight: 800,
+                        fontSize: { xs: '1.75rem', sm: '2rem' },
+                        color: isSelected ? 'rgba(255,255,255,0.95)' : 'text.primary',
+                        transition: 'all 0.3s ease',
+                        textShadow: isSelected ? '0 2px 8px rgba(0,0,0,0.3)' : 'none'
+                      }}
+                    >
+                      {count}
+                    </Typography>
+                    
+                    {/* Label */}
+                    <Typography 
+                      variant="body2" 
+                      sx={{ 
+                        fontWeight: 600,
+                        fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                        color: isSelected ? 'rgba(255,255,255,0.9)' : 'text.secondary',
+                        textAlign: 'center',
+                        lineHeight: 1.2,
+                        transition: 'all 0.3s ease',
+                        textShadow: isSelected ? '0 1px 4px rgba(0,0,0,0.3)' : 'none'
+                      }}
+                    >
+                      {category.shortLabel}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            );
+          })}
         </Grid>
-      </Box>
+
+        {/* Enhanced Filter Summary */}
+        {statusFilter !== 'all' && (
+          <Box sx={{ mt: 3, textAlign: 'center' }}>
+            <Chip
+              icon={React.createElement(statusCategories.find(cat => cat.key === statusFilter)?.icon)}
+              label={`${statusCategories.find(cat => cat.key === statusFilter)?.label} • ${statusCounts[statusFilter]} items`}
+              sx={{
+                px: 2,
+                py: 1,
+                height: 40,
+                fontSize: '0.9rem',
+                fontWeight: 600,
+                background: statusCategories.find(cat => cat.key === statusFilter)?.gradient,
+                color: 'white',
+                border: 'none',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                '& .MuiChip-icon': {
+                  color: 'rgba(255,255,255,0.9)',
+                  fontSize: 20
+                }
+              }}
+              onDelete={() => onFilterChange('all')}
+              deleteIcon={<CancelIcon sx={{ color: 'rgba(255,255,255,0.8) !important' }} />}
+            />
+          </Box>
+        )}
+      </Paper>
 
       {/* Currently Watching */}
       {currentlyWatching.length > 0 && (

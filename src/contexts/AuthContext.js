@@ -118,16 +118,45 @@ export const AuthProvider = ({ children }) => {
 
       const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Sync failed');
+      if (response.ok) {
+        // Update local user state with the new data
+        const updatedUser = {
+          username: user.username,
+          ...userData
+        };
+        setUser(updatedUser);
+        return data;
+      } else {
+        throw new Error(data.message || 'Failed to sync data');
       }
-
-      return { success: true };
     } catch (error) {
-      console.error('Sync error:', error);
+      console.error('Sync data error:', error);
+      // Still update local state even if sync fails
+      const updatedUser = {
+        username: user.username,
+        ...userData
+      };
+      setUser(updatedUser);
       throw error;
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const updateUserData = async (newData) => {
+    // Update local state immediately
+    const updatedUser = {
+      username: user.username,
+      ...newData
+    };
+    setUser(updatedUser);
+    
+    // Then sync to server
+    try {
+      await syncData(newData);
+    } catch (error) {
+      console.error('Failed to sync to server:', error);
+      // The local update is already done, so we continue
     }
   };
 
@@ -180,6 +209,7 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     syncData,
+    updateUserData,
     loadUserData,
     getUserStats,
     isAuthenticated: !!user

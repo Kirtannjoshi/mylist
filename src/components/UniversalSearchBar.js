@@ -1,39 +1,33 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useLocation } from 'react-router-dom';
-import Box from '@mui/material/Box';
-import TextField from '@mui/material/TextField';
-import InputAdornment from '@mui/material/InputAdornment';
-import IconButton from '@mui/material/IconButton';
-import Paper from '@mui/material/Paper';
-import List from '@mui/material/List';
-import ListItem from '@mui/material/ListItem';
-import ListItemButton from '@mui/material/ListItemButton';
-import ListItemText from '@mui/material/ListItemText';
-import ListItemAvatar from '@mui/material/ListItemAvatar';
-import Avatar from '@mui/material/Avatar';
-import Typography from '@mui/material/Typography';
-import Divider from '@mui/material/Divider';
-import CircularProgress from '@mui/material/CircularProgress';
-import SearchIcon from '@mui/icons-material/Search';
-import ClearIcon from '@mui/icons-material/Clear';
-import MovieIcon from '@mui/icons-material/Movie';
-import TvIcon from '@mui/icons-material/Tv';
-import MusicNoteIcon from '@mui/icons-material/MusicNote';
-import BookIcon from '@mui/icons-material/Book';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  Box,
+  TextField,
+  Paper,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  Avatar,
+  Typography,
+  InputAdornment,
+  IconButton,
+  CircularProgress,
+  Fade,
+  Slide
+} from '@mui/material';
+import {
+  Search as SearchIcon,
+  Movie as MovieIcon,
+  Tv as TvIcon,
+  Bookmark as BookmarkIcon,
+  Add as AddIcon,
+  Close as CloseIcon
+} from '@mui/icons-material';
+import { useNavigate, useLocation } from 'react-router-dom';
 
+// OMDB API configuration
+const API_KEY = '4d2dd959';
 const OMDB_URL = 'https://www.omdbapi.com/';
-const API_KEY = process.env.REACT_APP_OMDB_KEY || '4d2dd959';
-
-const getTypeIcon = (type) => {
-  switch (type?.toLowerCase()) {
-    case 'movie': return <MovieIcon />;
-    case 'series': return <TvIcon />;
-    case 'music': return <MusicNoteIcon />;
-    case 'book': return <BookIcon />;
-    default: return <MovieIcon />;
-  }
-};
 
 export default function UniversalSearchBar({ 
   onAdd, 
@@ -49,6 +43,8 @@ export default function UniversalSearchBar({
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
+  const searchTimeoutRef = useRef(null);
+  const resultsCache = useRef({});
 
   // Close search results when route changes
   useEffect(() => {
@@ -57,34 +53,50 @@ export default function UniversalSearchBar({
     setResults([]);
   }, [location.pathname]);
 
-  // Debounced search
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (query.trim().length > 2) {
-        searchMedia(query.trim());
+  // Optimized debounced search with caching
+  const debouncedSearch = useCallback((searchQuery) => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    searchTimeoutRef.current = setTimeout(() => {
+      if (searchQuery.trim().length > 2) {
+        // Check cache first
+        if (resultsCache.current[searchQuery]) {
+          setResults(resultsCache.current[searchQuery]);
+          setShowResults(true);
+          setLoading(false);
+          return;
+        }
+        
+        searchMedia(searchQuery.trim());
       } else {
         setResults([]);
         setShowResults(false);
       }
-    }, 300);
+    }, 150);
+  }, []);
 
-    return () => clearTimeout(timeoutId);
-  }, [query]);
-
+  // Enhanced search with better performance
   const searchMedia = async (searchQuery) => {
     setLoading(true);
     setError('');
     
     try {
-      // Search OMDB for movies/TV shows
-      const omdbUrl = `${OMDB_URL}?apikey=${API_KEY}&s=${encodeURIComponent(searchQuery)}&type=movie`;
-      console.log('Searching OMDB with URL:', omdbUrl);
-      const omdbResponse = await fetch(omdbUrl);
-      const omdbData = await omdbResponse.json();
-      console.log('OMDB Response:', omdbData);
+      // Parallel API calls for better performance
+      const [movieResponse, seriesResponse] = await Promise.all([
+        fetch(`${OMDB_URL}?apikey=${API_KEY}&s=${encodeURIComponent(searchQuery)}&type=movie`),
+        fetch(`${OMDB_URL}?apikey=${API_KEY}&s=${encodeURIComponent(searchQuery)}&type=series`)
+      ]);
+      
+      const [omdbData, tvData] = await Promise.all([
+        movieResponse.json(),
+        seriesResponse.json()
+      ]);
       
       let searchResults = [];
       
+      // Process movie results
       if (omdbData.Response === 'True') {
         searchResults = omdbData.Search.map(item => ({
           id: item.imdbID,
@@ -98,11 +110,7 @@ export default function UniversalSearchBar({
         }));
       }
 
-      // Also search for TV series
-      const tvUrl = `${OMDB_URL}?apikey=${API_KEY}&s=${encodeURIComponent(searchQuery)}&type=series`;
-      const tvResponse = await fetch(tvUrl);
-      const tvData = await tvResponse.json();
-      
+      // Process TV series results
       if (tvData.Response === 'True') {
         const tvResults = tvData.Search.map(item => ({
           id: item.imdbID,
@@ -117,18 +125,20 @@ export default function UniversalSearchBar({
         searchResults = [...searchResults, ...tvResults];
       }
 
-      // Remove duplicates and limit results
+      // Remove duplicates and limit results for performance
       const uniqueResults = searchResults
         .filter((item, index, self) => index === self.findIndex(t => t.imdbID === item.imdbID))
-        .slice(0, 8);
+        .slice(0, 6);
       
-      console.log('Final search results:', uniqueResults);
+      // Cache results
+      resultsCache.current[searchQuery] = uniqueResults;
+      
       setResults(uniqueResults);
       setShowResults(uniqueResults.length > 0);
       
     } catch (err) {
-      console.error('Search error details:', err);
-      setError(`Search failed: ${err.message}. Please try again.`);
+      console.error('Search error:', err);
+      setError('Search failed. Please try again.');
       setResults([]);
       setShowResults(false);
     } finally {
@@ -136,185 +146,305 @@ export default function UniversalSearchBar({
     }
   };
 
-  const handleResultClick = async (item) => {
-    try {
-      // Get detailed information
-      const detailUrl = `${OMDB_URL}?apikey=${API_KEY}&i=${item.imdbID}`;
-      const response = await fetch(detailUrl);
-      const detailedItem = await response.json();
-      
-      const mediaItem = {
-        imdbID: detailedItem.imdbID,
-        title: detailedItem.Title,
-        subtitle: `${detailedItem.Type?.toUpperCase()} • ${detailedItem.Year}`,
-        poster: detailedItem.Poster !== 'N/A' ? detailedItem.Poster : null,
-        type: detailedItem.Type,
-        year: detailedItem.Year,
-        rating: detailedItem.imdbRating,
-        plot: detailedItem.Plot,
-        status: 'thinking-to-watch'
-      };
-      
-      if (onAdd) {
-        const result = onAdd(mediaItem);
-        if (result && !result.success) {
-          // Handle duplicate case
-          console.log(result.message);
-        }
-      }
-      
-      // Clear search
-      setQuery('');
-      setResults([]);
-      setShowResults(false);
-      
-    } catch (err) {
-      console.error('Error adding item:', err);
-    }
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    setQuery(value);
+    debouncedSearch(value);
   };
 
-  const clearSearch = () => {
-    setQuery('');
-    setResults([]);
-    setShowResults(false);
-    setError('');
-  };
-
-  const handleKeyDown = (event) => {
-    if (event.key === 'Escape') {
-      clearSearch();
-    } else if (event.key === 'Enter' && query.trim()) {
-      // Navigate to search results page
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && query.trim()) {
+      // Navigate to search results page with query
       navigate(`/search?q=${encodeURIComponent(query.trim())}`);
-      clearSearch();
+      setShowResults(false);
     }
   };
 
   const handleViewAllResults = () => {
     if (query.trim()) {
       navigate(`/search?q=${encodeURIComponent(query.trim())}`);
-      clearSearch(); // Clear search when navigating to results page
+      setShowResults(false);
     }
   };
 
+  const handleResultClick = async (item) => {
+    try {
+      // Navigate to movie details page directly
+      if (item.imdbID) {
+        navigate(`/movie/${item.imdbID}`);
+        setQuery('');
+        setResults([]);
+        setShowResults(false);
+        return;
+      }
+    } catch (err) {
+      console.error('Error navigating to movie details:', err);
+    }
+  };
+
+  const handleAddClick = (e, item) => {
+    e.stopPropagation();
+    if (onAdd) {
+      onAdd(item);
+    }
+  };
+
+  const getIcon = (type) => {
+    switch(type) {
+      case 'movie': return <MovieIcon sx={{ color: '#f5c518' }} />;
+      case 'series': return <TvIcon sx={{ color: '#00d4ff' }} />;
+      default: return <BookmarkIcon sx={{ color: '#8e24aa' }} />;
+    }
+  };
+
+  const handleClearSearch = () => {
+    setQuery('');
+    setResults([]);
+    setShowResults(false);
+    setError('');
+  };
+
   return (
-    <Box sx={{ position: 'relative', width: '100%', maxWidth: compact ? 300 : 600, ...sx }}>
+    <Box sx={{ position: 'relative', width: '100%', ...sx }}>
       <TextField
         fullWidth
         variant="outlined"
         placeholder={placeholder}
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onKeyDown={handleKeyDown}
+        onChange={handleInputChange}
+        onKeyPress={handleKeyPress}
         size={compact ? "small" : "medium"}
-        onFocus={() => {
-          if (results.length > 0) setShowResults(true);
-        }}
         InputProps={{
           startAdornment: (
             <InputAdornment position="start">
-              {loading ? <CircularProgress size={compact ? 16 : 20} /> : <SearchIcon />}
+              <SearchIcon sx={{ color: 'rgba(255, 255, 255, 0.7)' }} />
             </InputAdornment>
           ),
-          endAdornment: query && (
+          endAdornment: (
             <InputAdornment position="end">
-              <IconButton onClick={clearSearch} size="small">
-                <ClearIcon />
-              </IconButton>
+              {loading && (
+                <Fade in={loading}>
+                  <CircularProgress size={20} sx={{ color: '#f5c518' }} />
+                </Fade>
+              )}
+              {query && !loading && (
+                <IconButton
+                  size="small"
+                  onClick={handleClearSearch}
+                  sx={{ 
+                    ml: 1,
+                    '&:hover': {
+                      backgroundColor: 'rgba(255, 255, 255, 0.1)'
+                    }
+                  }}
+                >
+                  <CloseIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              )}
             </InputAdornment>
-          ),
-          sx: {
-            borderRadius: compact ? 2 : 3,
-            bgcolor: 'background.paper',
-            '& .MuiOutlinedInput-notchedOutline': {
-              borderColor: 'divider',
+          )
+        }}
+        sx={{
+          '& .MuiOutlinedInput-root': {
+            backgroundColor: 'rgba(255, 255, 255, 0.08)',
+            borderRadius: compact ? '12px' : '16px',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            minHeight: compact ? '40px' : '48px',
+            '& fieldset': {
+              borderColor: 'rgba(255, 255, 255, 0.12)',
+              transition: 'all 0.3s ease',
             },
-            '&:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: 'primary.main',
+            '&:hover fieldset': {
+              borderColor: 'rgba(245, 197, 24, 0.5)',
             },
-            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-              borderColor: 'primary.main',
-            }
-          }
+            '&.Mui-focused fieldset': {
+              borderColor: '#f5c518',
+              boxShadow: '0 0 0 2px rgba(245, 197, 24, 0.1)',
+            },
+          },
+          '& .MuiInputBase-input': {
+            color: 'rgba(255, 255, 255, 0.9)',
+            fontSize: compact ? '14px' : '16px',
+            padding: compact ? '8px 12px' : '12px 16px',
+            '&::placeholder': {
+              color: 'rgba(255, 255, 255, 0.5)',
+            },
+          },
         }}
       />
-      
-      {showResults && results.length > 0 && (
+
+      <Slide direction="down" in={showResults} mountOnEnter unmountOnExit>
         <Paper
-          elevation={8}
+          elevation={24}
           sx={{
             position: 'absolute',
             top: '100%',
             left: 0,
             right: 0,
-            zIndex: 1000,
-            maxHeight: 400,
-            overflow: 'auto',
             mt: 1,
-            borderRadius: 2,
-            border: '1px solid',
-            borderColor: 'divider'
+            maxHeight: { xs: '60vh', sm: '400px' }, // More space on mobile
+            overflow: 'auto',
+            zIndex: 1000,
+            borderRadius: compact ? '12px' : '16px',
+            backgroundColor: 'rgba(18, 18, 18, 0.95)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)',
+            '&::-webkit-scrollbar': {
+              width: 6,
+            },
+            '&::-webkit-scrollbar-track': {
+              backgroundColor: 'rgba(255, 255, 255, 0.05)',
+            },
+            '&::-webkit-scrollbar-thumb': {
+              backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              borderRadius: 3,
+            },
           }}
         >
-          <List disablePadding>
-            {results.map((item, index) => (
-              <Box key={item.id}>
-                <ListItem disablePadding>
-                  <ListItemButton onClick={() => handleResultClick(item)}>
+          {error ? (
+            <Box p={2}>
+              <Typography color="error" variant="body2">
+                {error}
+              </Typography>
+            </Box>
+          ) : (
+            <List sx={{ p: 0 }}>
+              {results.map((item, index) => (
+                <Fade in={true} key={`${item.source}-${item.id}`} timeout={300 + index * 100}>
+                  <ListItem
+                    button
+                    onClick={() => handleResultClick(item)}
+                    sx={{
+                      borderBottom: index < results.length - 1 ? '1px solid rgba(255, 255, 255, 0.05)' : 'none',
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                      minHeight: { xs: '80px', sm: '72px' }, // Taller touch targets on mobile
+                      py: { xs: 2, sm: 1 }, // More padding on mobile
+                      '&:hover': {
+                        backgroundColor: 'rgba(245, 197, 24, 0.08)',
+                        transform: 'translateX(4px)',
+                      },
+                      '&:active': {
+                        transform: 'translateX(2px)',
+                        backgroundColor: 'rgba(245, 197, 24, 0.12)',
+                      },
+                    }}
+                  >
                     <ListItemAvatar>
                       <Avatar
                         src={item.poster}
-                        sx={{ 
-                          bgcolor: 'primary.main',
-                          '& img': { objectFit: 'cover' }
+                        variant="rounded"
+                        sx={{
+                          width: { xs: 40, sm: 48 }, // Smaller on mobile for more text space
+                          height: { xs: 60, sm: 72 },
+                          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                          border: '1px solid rgba(255, 255, 255, 0.05)',
                         }}
                       >
-                        {getTypeIcon(item.type)}
+                        {getIcon(item.type)}
                       </Avatar>
                     </ListItemAvatar>
                     <ListItemText
                       primary={
-                        <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                        <Typography 
+                          variant={compact ? "body1" : "subtitle1"} 
+                          sx={{ 
+                            fontWeight: 600,
+                            color: 'rgba(255, 255, 255, 0.95)',
+                            lineHeight: 1.2,
+                            fontSize: { xs: '14px', sm: compact ? '14px' : '16px' },
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
                           {item.title}
                         </Typography>
                       }
                       secondary={
-                        <Typography variant="body2" color="text.secondary">
+                        <Typography 
+                          variant="body2" 
+                          sx={{ 
+                            color: 'rgba(255, 255, 255, 0.6)',
+                            mt: 0.5,
+                            fontSize: { xs: '12px', sm: '14px' },
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
                           {item.subtitle}
                         </Typography>
                       }
+                      sx={{ flex: 1, ml: { xs: 1.5, sm: 2 } }}
                     />
-                  </ListItemButton>
+                    {onAdd && (
+                      <IconButton
+                        onClick={(e) => handleAddClick(e, item)}
+                        sx={{ 
+                          ml: 1,
+                          color: '#f5c518',
+                          '&:hover': {
+                            backgroundColor: 'rgba(245, 197, 24, 0.1)',
+                            transform: 'scale(1.1)',
+                          },
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        <AddIcon />
+                      </IconButton>
+                    )}
+                  </ListItem>
+                </Fade>
+              ))}
+              {results.length === 0 && !loading && query.length > 2 && (
+                <ListItem>
+                  <ListItemText
+                    primary={
+                      <Typography color="rgba(255, 255, 255, 0.7)">
+                        No results found
+                      </Typography>
+                    }
+                    secondary={
+                      <Typography color="rgba(255, 255, 255, 0.5)">
+                        Try a different search term
+                      </Typography>
+                    }
+                  />
                 </ListItem>
-                {index < results.length - 1 && <Divider />}
-              </Box>
-            ))}
-          </List>
-          
-          {query && (
-            <Box sx={{ p: 1, bgcolor: 'background.default', textAlign: 'center', borderTop: '1px solid', borderColor: 'divider' }}>
-              <Typography 
-                variant="body2" 
-                color="primary" 
-                sx={{ 
-                  cursor: 'pointer', 
-                  fontWeight: 500,
-                  '&:hover': { textDecoration: 'underline' }
-                }}
-                onClick={handleViewAllResults}
-              >
-                View All Results for "{query}" →
-              </Typography>
-            </Box>
+              )}
+              {results.length > 0 && (
+                <ListItem
+                  button
+                  onClick={handleViewAllResults}
+                  sx={{
+                    borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+                    backgroundColor: 'rgba(245, 197, 24, 0.05)',
+                    '&:hover': {
+                      backgroundColor: 'rgba(245, 197, 24, 0.1)',
+                    },
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  <ListItemText
+                    primary={
+                      <Typography 
+                        sx={{ 
+                          textAlign: 'center',
+                          fontWeight: 600,
+                          color: '#f5c518',
+                        }}
+                      >
+                        View All Results →
+                      </Typography>
+                    }
+                  />
+                </ListItem>
+              )}
+            </List>
           )}
         </Paper>
-      )}
-      
-      {error && (
-        <Typography variant="caption" color="error" sx={{ display: 'block', mt: 1 }}>
-          {error}
-        </Typography>
-      )}
+      </Slide>
     </Box>
   );
 }

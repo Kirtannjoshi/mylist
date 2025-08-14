@@ -1,0 +1,460 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import Box from '@mui/material/Box';
+import TextField from '@mui/material/TextField';
+import InputAdornment from '@mui/material/InputAdornment';
+import IconButton from '@mui/material/IconButton';
+import Paper from '@mui/material/Paper';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemButton from '@mui/material/ListItemButton';
+import ListItemText from '@mui/material/ListItemText';
+import ListItemAvatar from '@mui/material/ListItemAvatar';
+import Avatar from '@mui/material/Avatar';
+import Typography from '@mui/material/Typography';
+import Divider from '@mui/material/Divider';
+import CircularProgress from '@mui/material/CircularProgress';
+import Fade from '@mui/material/Fade';
+import Slide from '@mui/material/Slide';
+import Button from '@mui/material/Button';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
+import MovieIcon from '@mui/icons-material/Movie';
+import TvIcon from '@mui/icons-material/Tv';
+import MusicNoteIcon from '@mui/icons-material/MusicNote';
+import BookIcon from '@mui/icons-material/Book';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+
+const OMDB_URL = 'https://www.omdbapi.com/';
+const API_KEY = process.env.REACT_APP_OMDB_KEY || '4d2dd959';
+
+const getTypeIcon = (type) => {
+  switch (type?.toLowerCase()) {
+    case 'movie': return <MovieIcon />;
+    case 'series': return <TvIcon />;
+    case 'music': return <MusicNoteIcon />;
+    case 'book': return <BookIcon />;
+    default: return <MovieIcon />;
+  }
+};
+
+export default function UniversalSearchBar({ 
+  onAdd, 
+  onOpenDetail, 
+  placeholder = "Search movies, TV shows, todos, bucket list...",
+  compact = false,
+  sx = {}
+}) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const [error, setError] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const searchTimeoutRef = useRef(null);
+  const resultsCache = useRef({});
+
+  // Close search results when route changes
+  useEffect(() => {
+    setShowResults(false);
+    setQuery('');
+    setResults([]);
+  }, [location.pathname]);
+
+  // Optimized debounced search with caching
+  const debouncedSearch = useCallback((searchQuery) => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    searchTimeoutRef.current = setTimeout(() => {
+      if (searchQuery.trim().length > 2) {
+        // Check cache first
+        if (resultsCache.current[searchQuery]) {
+          setResults(resultsCache.current[searchQuery]);
+          setShowResults(true);
+          setLoading(false);
+          setIsTyping(false);
+          return;
+        }
+        
+        searchMedia(searchQuery.trim());
+      } else {
+        setResults([]);
+        setShowResults(false);
+        setIsTyping(false);
+      }
+    }, 150); // Reduced debounce time for better responsiveness
+  }, []);
+
+  // Enhanced search with better error handling and performance
+  const searchMedia = async (searchQuery) => {
+    setLoading(true);
+    setError('');
+    setIsTyping(false);
+    
+    try {
+      // Parallel API calls for better performance
+      const [movieResponse, seriesResponse] = await Promise.all([
+        fetch(`${OMDB_URL}?apikey=${API_KEY}&s=${encodeURIComponent(searchQuery)}&type=movie`),
+        fetch(`${OMDB_URL}?apikey=${API_KEY}&s=${encodeURIComponent(searchQuery)}&type=series`)
+      ]);
+      
+      const [omdbData, tvData] = await Promise.all([
+        movieResponse.json(),
+        seriesResponse.json()
+      ]);
+      
+      let searchResults = [];
+      
+      // Process movie results
+      if (omdbData.Response === 'True') {
+        searchResults = omdbData.Search.map(item => ({
+          id: item.imdbID,
+          imdbID: item.imdbID,
+          title: item.Title,
+          subtitle: `${item.Type?.toUpperCase()} • ${item.Year}`,
+          poster: item.Poster !== 'N/A' ? item.Poster : null,
+          type: item.Type,
+          year: item.Year,
+          source: 'omdb'
+        }));
+      }
+
+      // Process TV series results
+      if (tvData.Response === 'True') {
+        const tvResults = tvData.Search.map(item => ({
+          id: item.imdbID,
+          imdbID: item.imdbID,
+          title: item.Title,
+          subtitle: `${item.Type?.toUpperCase()} • ${item.Year}`,
+          poster: item.Poster !== 'N/A' ? item.Poster : null,
+          type: item.Type,
+          year: item.Year,
+          source: 'omdb'
+        }));
+        searchResults = [...searchResults, ...tvResults];
+      }
+
+      // Remove duplicates and limit results for better performance
+      const uniqueResults = searchResults
+        .filter((item, index, self) => index === self.findIndex(t => t.imdbID === item.imdbID))
+        .slice(0, 6); // Reduced for better performance and UI
+      
+      // Cache results
+      resultsCache.current[searchQuery] = uniqueResults;
+      
+      setResults(uniqueResults);
+      setShowResults(uniqueResults.length > 0);
+      
+    } catch (err) {
+      console.error('Search error details:', err);
+      setError(`Search failed. Please try again.`);
+      setResults([]);
+      setShowResults(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    setQuery(value);
+    setIsTyping(true);
+    debouncedSearch(value);
+  };
+
+  const handleResultClick = async (item) => {
+    try {
+      // Navigate to movie details page directly
+      if (item.imdbID) {
+        navigate(`/movie/${item.imdbID}`);
+        setQuery('');
+        setResults([]);
+        setShowResults(false);
+        return;
+      }
+
+      // Fallback for adding to library
+      const detailUrl = `${OMDB_URL}?apikey=${API_KEY}&i=${item.imdbID}`;
+      const response = await fetch(detailUrl);
+      const detailedItem = await response.json();
+      
+      const mediaItem = {
+        imdbID: detailedItem.imdbID,
+        title: detailedItem.Title,
+        subtitle: `${detailedItem.Type?.toUpperCase()} • ${detailedItem.Year}`,
+        poster: detailedItem.Poster !== 'N/A' ? detailedItem.Poster : null,
+  const location = useLocation();
+
+  // Close search results when route changes
+  useEffect(() => {
+    setShowResults(false);
+    setQuery('');
+    setResults([]);
+  }, [location.pathname]);
+
+  // Debounced search
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (query.trim().length > 2) {
+        searchMedia(query.trim());
+      } else {
+        setResults([]);
+        setShowResults(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [query]);
+
+  const searchMedia = async (searchQuery) => {
+    setLoading(true);
+    setError('');
+    
+    try {
+      // Search OMDB for movies/TV shows
+      const omdbUrl = `${OMDB_URL}?apikey=${API_KEY}&s=${encodeURIComponent(searchQuery)}&type=movie`;
+      console.log('Searching OMDB with URL:', omdbUrl);
+      const omdbResponse = await fetch(omdbUrl);
+      const omdbData = await omdbResponse.json();
+      console.log('OMDB Response:', omdbData);
+      
+      let searchResults = [];
+      
+      if (omdbData.Response === 'True') {
+        searchResults = omdbData.Search.map(item => ({
+          id: item.imdbID,
+          imdbID: item.imdbID,
+          title: item.Title,
+          subtitle: `${item.Type?.toUpperCase()} • ${item.Year}`,
+          poster: item.Poster !== 'N/A' ? item.Poster : null,
+          type: item.Type,
+          year: item.Year,
+          source: 'omdb'
+        }));
+      }
+
+      // Also search for TV series
+      const tvUrl = `${OMDB_URL}?apikey=${API_KEY}&s=${encodeURIComponent(searchQuery)}&type=series`;
+      const tvResponse = await fetch(tvUrl);
+      const tvData = await tvResponse.json();
+      
+      if (tvData.Response === 'True') {
+        const tvResults = tvData.Search.map(item => ({
+          id: item.imdbID,
+          imdbID: item.imdbID,
+          title: item.Title,
+          subtitle: `${item.Type?.toUpperCase()} • ${item.Year}`,
+          poster: item.Poster !== 'N/A' ? item.Poster : null,
+          type: item.Type,
+          year: item.Year,
+          source: 'omdb'
+        }));
+        searchResults = [...searchResults, ...tvResults];
+      }
+
+      // Remove duplicates and limit results
+      const uniqueResults = searchResults
+        .filter((item, index, self) => index === self.findIndex(t => t.imdbID === item.imdbID))
+        .slice(0, 8);
+      
+      console.log('Final search results:', uniqueResults);
+      setResults(uniqueResults);
+      setShowResults(uniqueResults.length > 0);
+      
+    } catch (err) {
+      console.error('Search error details:', err);
+      setError(`Search failed: ${err.message}. Please try again.`);
+      setResults([]);
+      setShowResults(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResultClick = async (item) => {
+    try {
+      // Get detailed information
+      const detailUrl = `${OMDB_URL}?apikey=${API_KEY}&i=${item.imdbID}`;
+      const response = await fetch(detailUrl);
+      const detailedItem = await response.json();
+      
+      const mediaItem = {
+        imdbID: detailedItem.imdbID,
+        title: detailedItem.Title,
+        subtitle: `${detailedItem.Type?.toUpperCase()} • ${detailedItem.Year}`,
+        poster: detailedItem.Poster !== 'N/A' ? detailedItem.Poster : null,
+        type: detailedItem.Type,
+        year: detailedItem.Year,
+        rating: detailedItem.imdbRating,
+        plot: detailedItem.Plot,
+        status: 'thinking-to-watch'
+      };
+      
+      if (onAdd) {
+        const result = onAdd(mediaItem);
+        if (result && !result.success) {
+          // Handle duplicate case
+          console.log(result.message);
+        }
+      }
+      
+      // Clear search
+      setQuery('');
+      setResults([]);
+      setShowResults(false);
+      
+    } catch (err) {
+      console.error('Error adding item:', err);
+    }
+  };
+
+  const clearSearch = () => {
+    setQuery('');
+    setResults([]);
+    setShowResults(false);
+    setError('');
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === 'Escape') {
+      clearSearch();
+    } else if (event.key === 'Enter' && query.trim()) {
+      // Navigate to search results page
+      navigate(`/search?q=${encodeURIComponent(query.trim())}`);
+      clearSearch();
+    }
+  };
+
+  const handleViewAllResults = () => {
+    if (query.trim()) {
+      navigate(`/search?q=${encodeURIComponent(query.trim())}`);
+      clearSearch(); // Clear search when navigating to results page
+    }
+  };
+
+  return (
+    <Box sx={{ position: 'relative', width: '100%', maxWidth: compact ? 300 : 600, ...sx }}>
+      <TextField
+        fullWidth
+        variant="outlined"
+        placeholder={placeholder}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={handleKeyDown}
+        size={compact ? "small" : "medium"}
+        onFocus={() => {
+          if (results.length > 0) setShowResults(true);
+        }}
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              {loading ? <CircularProgress size={compact ? 16 : 20} /> : <SearchIcon />}
+            </InputAdornment>
+          ),
+          endAdornment: query && (
+            <InputAdornment position="end">
+              <IconButton onClick={clearSearch} size="small">
+                <ClearIcon />
+              </IconButton>
+            </InputAdornment>
+          ),
+          sx: {
+            borderRadius: compact ? 2 : 3,
+            bgcolor: 'background.paper',
+            '& .MuiOutlinedInput-notchedOutline': {
+              borderColor: 'divider',
+            },
+            '&:hover .MuiOutlinedInput-notchedOutline': {
+              borderColor: 'primary.main',
+            },
+            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+              borderColor: 'primary.main',
+            }
+          }
+        }}
+      />
+      
+      {showResults && results.length > 0 && (
+        <Paper
+          elevation={8}
+          sx={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            right: 0,
+            zIndex: 1000,
+            maxHeight: 400,
+            overflow: 'auto',
+            mt: 1,
+            borderRadius: 2,
+            border: '1px solid',
+            borderColor: 'divider'
+          }}
+        >
+          <List disablePadding>
+            {results.map((item, index) => (
+              <Box key={item.id}>
+                <ListItem disablePadding>
+                  <ListItemButton onClick={() => handleResultClick(item)}>
+                    <ListItemAvatar>
+                      <Avatar
+                        src={item.poster}
+                        sx={{ 
+                          bgcolor: 'primary.main',
+                          '& img': { objectFit: 'cover' }
+                        }}
+                      >
+                        {getTypeIcon(item.type)}
+                      </Avatar>
+                    </ListItemAvatar>
+                    <ListItemText
+                      primary={
+                        <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                          {item.title}
+                        </Typography>
+                      }
+                      secondary={
+                        <Typography variant="body2" color="text.secondary">
+                          {item.subtitle}
+                        </Typography>
+                      }
+                    />
+                  </ListItemButton>
+                </ListItem>
+                {index < results.length - 1 && <Divider />}
+              </Box>
+            ))}
+          </List>
+          
+          {query && (
+            <Box sx={{ p: 1, bgcolor: 'background.default', textAlign: 'center', borderTop: '1px solid', borderColor: 'divider' }}>
+              <Typography 
+                variant="body2" 
+                color="primary" 
+                sx={{ 
+                  cursor: 'pointer', 
+                  fontWeight: 500,
+                  '&:hover': { textDecoration: 'underline' }
+                }}
+                onClick={handleViewAllResults}
+              >
+                View All Results for "{query}" →
+              </Typography>
+            </Box>
+          )}
+        </Paper>
+      )}
+      
+      {error && (
+        <Typography variant="caption" color="error" sx={{ display: 'block', mt: 1 }}>
+          {error}
+        </Typography>
+      )}
+    </Box>
+  );
+}

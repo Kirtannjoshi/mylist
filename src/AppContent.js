@@ -1,7 +1,6 @@
 import * as React from 'react';
 import Box from '@mui/material/Box';
 import AppBar from '@mui/material/AppBar';
-import IconButton from '@mui/material/IconButton';
 import CssBaseline from '@mui/material/CssBaseline';
 import Drawer from '@mui/material/Drawer';
 import List from '@mui/material/List';
@@ -14,14 +13,18 @@ import Typography from '@mui/material/Typography';
 import Divider from '@mui/material/Divider';
 import BottomNavigation from '@mui/material/BottomNavigation';
 import BottomNavigationAction from '@mui/material/BottomNavigationAction';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import MenuIcon from '@mui/icons-material/Menu';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import StarIcon from '@mui/icons-material/Star';
 import FlightIcon from '@mui/icons-material/Flight';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import Home from '@mui/icons-material/Home';
+import Movie from '@mui/icons-material/Movie';
+import MoreVert from '@mui/icons-material/MoreVert';
 import PopcornMovieIcon from './components/icons/PopcornMovieIcon';
 import MusicNoteIcon from '@mui/icons-material/MusicNote';
 import BookIcon from '@mui/icons-material/Book';
@@ -71,16 +74,33 @@ function SortableItem({ children, id }) {
 }
 
 export default function AppContent() {
-  const { userData, setUserData } = useAuth();
+  const { user, updateUserData } = useAuth();
   const [active, setActive] = React.useState('home');
-  const [mobileOpen, setMobileOpen] = React.useState(false);
   const [sidebarExpanded, setSidebarExpanded] = React.useState(false);
+  const [mobileMoreMenuAnchor, setMobileMoreMenuAnchor] = React.useState(null);
 
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
 
-  // Use userData from auth context instead of local state
-  const data = userData || {
+  // Mobile navigation items - 4 main buttons
+  const mobileNavItems = [
+    { key: 'home', text: 'Home', icon: <Home /> },
+    { key: 'entertainment', text: 'Entertainment', icon: <Movie /> },
+    { key: 'more', text: 'More', icon: <MoreVert /> },
+    { key: 'profile', text: 'Profile', icon: <AccountCircleIcon /> }
+  ];
+
+  // More menu items that appear in dropdown
+  const moreMenuItems = [
+    { key: 'todo', text: 'Todo List', icon: <CheckCircleIcon /> },
+    { key: 'travel', text: 'Travel', icon: <FlightIcon /> },
+    { key: 'bucket', text: 'Bucket List', icon: <StarIcon /> },
+    { key: 'songs', text: 'Songs', icon: <MusicNoteIcon /> },
+    { key: 'books', text: 'Books', icon: <BookIcon /> }
+  ];
+
+  // Use user data from auth context
+  const data = user || {
     todo: [],
     bucket: [],
     travel: [],
@@ -96,30 +116,38 @@ export default function AppContent() {
     const title = prompt('New item title');
     if (!title) return;
     const newData = { ...data, [active]: [{ title }, ...data[active]] };
-    setUserData(newData);
+    updateUserData(newData);
   };
 
   const updateData = (newData) => {
-    setUserData(newData);
+    updateUserData(newData);
   };
 
   return (
     <Box sx={{ display: 'flex', bgcolor: 'background.default', minHeight: '100vh' }}>
       <CssBaseline />
-      <AppBar position="fixed" elevation={0} sx={{ backgroundColor: 'background.paper', borderBottom: '1px solid', borderColor: 'divider' }}>
-        <Toolbar sx={{ gap: 2 }}>
-          {!isDesktop && (
-            <IconButton color="inherit" edge="start" onClick={() => setMobileOpen(true)}>
-              <MenuIcon />
-            </IconButton>
-          )}
-          <RetroLogo collapsed={false} />
+      <AppBar position="fixed" elevation={0} sx={{ 
+        backgroundColor: 'background.paper', 
+        borderBottom: '1px solid', 
+        borderColor: 'divider',
+        zIndex: (theme) => theme.zIndex.drawer + 1
+      }}>
+        <Toolbar sx={{ 
+          gap: { xs: 0.5, sm: 2 }, 
+          minHeight: { xs: '64px', sm: '64px' }, // Consistent height
+          px: { xs: 1, sm: 2 }
+        }}>
+          {/* Logo - smaller on mobile */}
+          <Box sx={{ flexShrink: 0, mr: { xs: 1, sm: 0 } }}>
+            <RetroLogo collapsed={!isDesktop} />
+          </Box>
           
-          {/* Universal Search Bar */}
+          {/* Universal Search Bar - Takes most space on mobile */}
           <Box sx={{ 
-            maxWidth: isDesktop ? 400 : 200, 
+            maxWidth: { xs: 'none', sm: 250, md: 400 }, 
+            width: { xs: '100%', sm: 'auto' },
             flexGrow: 1,
-            ml: !isDesktop ? 1 : 0 
+            mx: { xs: 1, sm: 2 }
           }}>
             <UniversalSearchBar 
                 onAdd={(item) => {
@@ -135,40 +163,51 @@ export default function AppContent() {
                   return { success: false, message: 'Already in your list!' };
                 }}
                 onOpenDetail={(id) => window.open(`#/movie/${id}`, '_blank')}
-                placeholder="Quick search..."
-                compact={true}
+                placeholder="Search movies, shows, and more..."
+                compact={isDesktop}
                 sx={{ 
+                  width: '100%',
                   '& .MuiTextField-root': {
                     bgcolor: 'rgba(255, 255, 255, 0.1)',
                     '& .MuiOutlinedInput-root': {
                       color: 'text.primary',
+                      fontSize: { xs: '16px', sm: '14px' }, // Larger text on mobile
+                      height: { xs: '48px', sm: '40px' }, // Taller on mobile
                       '& fieldset': {
                         borderColor: 'rgba(255, 255, 255, 0.2)',
+                        borderRadius: { xs: '12px', sm: '8px' }, // More rounded on mobile
                       },
                       '&:hover fieldset': {
                         borderColor: 'rgba(255, 255, 255, 0.3)',
                       },
                       '&.Mui-focused fieldset': {
                         borderColor: 'primary.main',
+                        borderWidth: '2px',
                       },
                     },
-                    '& .MuiInputBase-input::placeholder': {
-                      color: 'rgba(255, 255, 255, 0.7)',
-                      opacity: 1,
+                    '& .MuiInputBase-input': {
+                      padding: { xs: '12px 14px', sm: '8.5px 14px' }, // More padding on mobile
+                      '&::placeholder': {
+                        color: 'rgba(255, 255, 255, 0.7)',
+                        opacity: 1,
+                        fontSize: { xs: '16px', sm: '14px' }, // Larger placeholder on mobile
+                      },
                     },
                   }
                 }}
               />
             </Box>
           
-          <Box sx={{ flex: isDesktop ? 0 : 1 }} />
-          <Typography variant="body2" color="text.secondary">
-            {listItems.find(l=>l.key===active)?.text}
-          </Typography>
+          {/* Page title - hidden on mobile to save space */}
+          {isDesktop && (
+            <Typography variant="body2" color="text.secondary">
+              {listItems.find(l=>l.key===active)?.text}
+            </Typography>
+          )}
         </Toolbar>
       </AppBar>
 
-      {isDesktop ? (
+      {isDesktop && (
         <Drawer
           variant="permanent"
           onMouseEnter={() => setSidebarExpanded(true)}
@@ -207,31 +246,6 @@ export default function AppContent() {
                     {item.icon}
                   </ListItemIcon>
                   <ListItemText primary={item.text} sx={{ opacity: sidebarExpanded ? 1 : 0 }} />
-                </ListItemButton>
-              </ListItem>
-            ))}
-          </List>
-        </Drawer>
-      ) : (
-        <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={() => setMobileOpen(false)}
-          ModalProps={{ keepMounted: true }}
-          sx={{
-            [`& .MuiDrawer-paper`]: { boxSizing: 'border-box', width: drawerWidthOpen, bgcolor: 'background.paper' },
-          }}
-        >
-          <Box sx={{ p: 1 }}>
-            <RetroLogo collapsed={false} />
-          </Box>
-          <Divider />
-          <List>
-            {listItems.map((item) => (
-              <ListItem key={item.key} disablePadding>
-                <ListItemButton selected={active === item.key} onClick={() => { setActive(item.key); setMobileOpen(false); }}>
-                  <ListItemIcon>{item.icon}</ListItemIcon>
-                  <ListItemText primary={item.text} />
                 </ListItemButton>
               </ListItem>
             ))}
@@ -371,16 +385,94 @@ export default function AppContent() {
           } />
         </Routes>
         {(!isDesktop) && (
-          <BottomNavigation
-            showLabels
-            value={listItems.findIndex((l) => l.key === active)}
-            onChange={(_, idx) => setActive(listItems[idx].key)}
-            sx={{ position: 'fixed', bottom: 0, left: 0, right: 0, borderTop: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}
-          >
-            {listItems.map((l) => (
-              <BottomNavigationAction key={l.key} label={l.text.split(' ')[0]} icon={l.icon} />
-            ))}
-          </BottomNavigation>
+          <>
+            <BottomNavigation
+              showLabels
+              value={mobileNavItems.findIndex((item) => item.key === active)}
+              onChange={(_, newValue) => {
+                const selectedItem = mobileNavItems[newValue];
+                if (selectedItem.key === 'more') {
+                  // Don't set active to 'more', just open the menu
+                  setMobileMoreMenuAnchor(document.querySelector('[data-testid="more-nav-button"]'));
+                } else {
+                  setActive(selectedItem.key);
+                }
+              }}
+              sx={{ 
+                position: 'fixed', 
+                bottom: 0, 
+                left: 0, 
+                right: 0, 
+                borderTop: '1px solid', 
+                borderColor: 'divider', 
+                bgcolor: 'background.paper',
+                '& .MuiBottomNavigationAction-root': {
+                  color: 'rgba(255, 255, 255, 0.6)',
+                  '&.Mui-selected': {
+                    color: '#f5c518',
+                  },
+                },
+              }}
+            >
+              {mobileNavItems.map((item) => (
+                <BottomNavigationAction 
+                  key={item.key} 
+                  label={item.text} 
+                  icon={item.icon}
+                  data-testid={item.key === 'more' ? 'more-nav-button' : undefined}
+                />
+              ))}
+            </BottomNavigation>
+
+            {/* More Options Menu */}
+            <Menu
+              anchorEl={mobileMoreMenuAnchor}
+              open={Boolean(mobileMoreMenuAnchor)}
+              onClose={() => setMobileMoreMenuAnchor(null)}
+              anchorOrigin={{
+                vertical: 'top',
+                horizontal: 'center',
+              }}
+              transformOrigin={{
+                vertical: 'bottom',
+                horizontal: 'center',
+              }}
+              PaperProps={{
+                sx: {
+                  bgcolor: 'rgba(18, 18, 18, 0.95)',
+                  backdropFilter: 'blur(20px)',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  borderRadius: '16px',
+                  mb: 1,
+                  minWidth: 200,
+                }
+              }}
+            >
+              {moreMenuItems.map((item) => (
+                <MenuItem 
+                  key={item.key}
+                  onClick={() => {
+                    setActive(item.key);
+                    setMobileMoreMenuAnchor(null);
+                  }}
+                  sx={{
+                    color: 'rgba(255, 255, 255, 0.9)',
+                    '&:hover': {
+                      backgroundColor: 'rgba(245, 197, 24, 0.1)',
+                    },
+                    borderRadius: '8px',
+                    mx: 1,
+                    my: 0.5,
+                  }}
+                >
+                  <ListItemIcon sx={{ color: 'inherit', minWidth: '40px' }}>
+                    {item.icon}
+                  </ListItemIcon>
+                  <ListItemText primary={item.text} />
+                </MenuItem>
+              ))}
+            </Menu>
+          </>
         )}
       </Box>
     </Box>
