@@ -122,6 +122,13 @@ export default function EntertainmentPage({
   const [recommendations, setRecommendations] = useState([]);
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
 
+  // Debug logging
+  useEffect(() => {
+    console.log('EntertainmentPage - savedMedia:', savedMedia);
+    console.log('EntertainmentPage - savedMedia length:', savedMedia.length);
+    console.log('EntertainmentPage - statusFilter:', statusFilter);
+  }, [savedMedia, statusFilter]);
+
   // Generate personalized recommendations based on user's saved media
   useEffect(() => {
     const loadRecommendations = async () => {
@@ -554,6 +561,50 @@ export default function EntertainmentPage({
                 {(() => {
                   const filteredMedia = savedMedia.filter((m) => m.status === statusFilter).slice(0, visibleCount);
                   const visibleIds = filteredMedia.map((m) => (m.imdbID||m.title));
+                  
+                  // Show empty state if no content
+                  if (filteredMedia.length === 0) {
+                    return (
+                      <Box sx={{ 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        py: 8,
+                        px: 4,
+                        textAlign: 'center'
+                      }}>
+                        <PlayCircleIcon sx={{ 
+                          fontSize: 80, 
+                          color: 'text.disabled', 
+                          mb: 2 
+                        }} />
+                        <Typography variant="h5" color="text.secondary" sx={{ mb: 1 }}>
+                          {savedMedia.length === 0 
+                            ? "No movies or shows yet"
+                            : `No ${statusCategories.find(cat => cat.key === statusFilter)?.label.toLowerCase() || statusFilter} titles`
+                          }
+                        </Typography>
+                        <Typography variant="body2" color="text.disabled" sx={{ mb: 3, maxWidth: 400 }}>
+                          {savedMedia.length === 0
+                            ? "Start building your entertainment collection by searching and adding movies or TV shows above!"
+                            : `You haven't added any ${statusCategories.find(cat => cat.key === statusFilter)?.label.toLowerCase() || statusFilter} titles yet. Try switching to a different category or add new content!`
+                          }
+                        </Typography>
+                        {savedMedia.length === 0 && (
+                          <Button 
+                            variant="contained" 
+                            color="primary"
+                            startIcon={<TrendingUpIcon />}
+                            onClick={() => onFilterChange('all')}
+                            sx={{ borderRadius: 2 }}
+                          >
+                            Explore Trending
+                          </Button>
+                        )}
+                      </Box>
+                    );
+                  }
                   
                   return (
                     <SortableContext items={visibleIds} strategy={rectSortingStrategy}>

@@ -109,6 +109,14 @@ export default function AppContent() {
     books: [],
   };
 
+  // Debug logging
+  React.useEffect(() => {
+    console.log('AppContent - user:', user);
+    console.log('AppContent - data:', data);
+    console.log('AppContent - data.media:', data.media);
+    console.log('AppContent - data.media length:', data.media?.length || 0);
+  }, [user, data]);
+
   const [statusFilter, setStatusFilter] = React.useState('all');
   const [visibleCount, setVisibleCount] = React.useState(24);
 
