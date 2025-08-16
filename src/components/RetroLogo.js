@@ -12,31 +12,23 @@ export default function RetroLogo({ collapsed = false }) {
       py: 1.5,
       justifyContent: collapsed ? 'center' : 'flex-start'
     }}>
-      <Box sx={{
-        width: collapsed ? 28 : 32,
-        height: collapsed ? 28 : 32,
-        background: 'linear-gradient(45deg, #ff6b35, #f7931e, #7209b7)',
-        borderRadius: 1,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative',
-        '&::before': {
-          content: '""',
-          position: 'absolute',
-          inset: 2,
-          background: 'background.paper',
-          borderRadius: 0.5,
-        },
-        '&::after': {
-          content: '"✦"',
-          position: 'absolute',
-          fontSize: collapsed ? 14 : 16,
-          fontWeight: 'bold',
-          color: 'primary.main',
-          zIndex: 1,
-        }
-      }} />
+      {/* Custom myLIST Logo */}
+      <Box
+        component="img"
+        src="/logo.png"
+        alt="myLIST Logo"
+        sx={{
+          width: collapsed ? 32 : 40,
+          height: collapsed ? 32 : 40,
+          objectFit: 'contain',
+          filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))',
+          transition: 'all 0.3s ease',
+          '&:hover': {
+            transform: 'scale(1.05)',
+            filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))'
+          }
+        }}
+      />
       {!collapsed && (
         <Typography 
           variant="h6" 
