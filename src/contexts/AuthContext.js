@@ -43,169 +43,219 @@ export const AuthProvider = ({ children }) => {
     }
   }, [user]);
 
-  const login = async (username) => {
+  // Helper function to sync data to backend
+  const syncDataToBackend = async (userData) => {
     try {
-      // Check if we're in mobile/offline mode or localhost is not available
-      const shouldUseOfflineMode = isMobileOrOffline();
-      
-      if (shouldUseOfflineMode) {
-        // Offline mode - use localStorage only
-        console.log('Using offline mode for mobile/deployed environment');
-        setOfflineMode(true);
-        
-        const existingUsers = JSON.parse(localStorage.getItem('mylist_offline_users') || '{}');
-        
-        if (existingUsers[username]) {
-          // User exists in offline storage
-          const userData = {
-            username: username.trim(),
-            ...existingUsers[username]
-          };
-          setUser(userData);
-          return { success: true, message: `Welcome back, ${username}!` };
-        } else {
-          // User doesn't exist, needs registration
-          return { success: false, needsRegistration: true };
-        }
-      }
-
-      // Online mode - try to connect to backend
-      const response = await fetch(`${API_BASE_URL}/auth/check-username`, {
+      const response = await fetch(`${API_BASE_URL}/user/save-data`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username }),
+        body: JSON.stringify({
+          username: userData.username,
+          userData: userData
+        }),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
-      }
-
-      if (data.exists) {
-        const userData = {
-          username: username.trim(),
-          ...data.userData
-        };
-        setUser(userData);
-        return { success: true, message: data.message };
-      } else {
-        return { success: false, needsRegistration: true };
+      
+      if (response.ok) {
+        console.log('Data synced to backend successfully');
+        return true;
       }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Failed to sync to backend:', error);
+    }
+    return false;
+  };
+
+  const login = async (username) => {
+    try {
+      const trimmedUsername = username.trim().toLowerCase(); // Normalize username
       
-      // If backend fails, fall back to offline mode
-      console.log('Backend unavailable, switching to offline mode');
-      setOfflineMode(true);
+      // First, always check localStorage for existing user data
+      const localUsers = JSON.parse(localStorage.getItem('mylist_offline_users') || '{}');
+      const localUserData = localUsers[trimmedUsername];
       
-      const existingUsers = JSON.parse(localStorage.getItem('mylist_offline_users') || '{}');
+      // Try to connect to backend first
+      let backendUserData = null;
+      let backendAvailable = false;
       
-      if (existingUsers[username]) {
-        const userData = {
-          username: username.trim(),
-          ...existingUsers[username]
-        };
-        setUser(userData);
-        return { success: true, message: `Welcome back, ${username}! (Offline mode)` };
+      try {
+        if (!isMobileOrOffline()) {
+          const response = await fetch(`${API_BASE_URL}/auth/check-username`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ username: trimmedUsername }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            backendAvailable = true;
+            
+            if (data.exists) {
+              backendUserData = {
+                username: trimmedUsername,
+                ...data.userData
+              };
+            }
+          }
+        }
+      } catch (backendError) {
+        console.log('Backend not available, using offline mode');
+        backendAvailable = false;
+      }
+      
+      // Determine the most recent and complete user data
+      let finalUserData = null;
+      
+      if (backendUserData && localUserData) {
+        // Both exist - merge them, preferring the most recently modified
+        const backendTime = new Date(backendUserData.lastModified || 0).getTime();
+        const localTime = new Date(localUserData.lastModified || 0).getTime();
+        
+        if (localTime > backendTime) {
+          // Local is newer, use local and sync to backend later
+          finalUserData = { username: trimmedUsername, ...localUserData };
+          if (backendAvailable) {
+            // Sync local data to backend in background
+            syncDataToBackend(finalUserData).catch(console.error);
+          }
+        } else {
+          // Backend is newer or same, use backend data
+          finalUserData = backendUserData;
+          // Update local storage with backend data
+          localUsers[trimmedUsername] = finalUserData;
+          localStorage.setItem('mylist_offline_users', JSON.stringify(localUsers));
+        }
+      } else if (backendUserData) {
+        // Only backend data exists
+        finalUserData = backendUserData;
+        // Save to local storage
+        localUsers[trimmedUsername] = finalUserData;
+        localStorage.setItem('mylist_offline_users', JSON.stringify(localUsers));
+      } else if (localUserData) {
+        // Only local data exists
+        finalUserData = { username: trimmedUsername, ...localUserData };
+        if (backendAvailable) {
+          // Try to sync to backend
+          syncDataToBackend(finalUserData).catch(console.error);
+        }
       } else {
+        // No user data found anywhere
         return { success: false, needsRegistration: true };
       }
+      
+      // Set offline mode if backend is not available
+      setOfflineMode(!backendAvailable);
+      setUser(finalUserData);
+      
+      const modeMessage = backendAvailable ? '' : ' (Offline mode)';
+      return { success: true, message: `Welcome back, ${trimmedUsername}!${modeMessage}` };
+      
+    } catch (error) {
+      console.error('Login error:', error);
+      return { success: false, message: error.message || 'Login failed' };
     }
   };
 
   const register = async (username) => {
     try {
-      // Check if we're in mobile/offline mode
-      const shouldUseOfflineMode = isMobileOrOffline() || offlineMode;
+      const trimmedUsername = username.trim().toLowerCase(); // Normalize username
       
-      if (shouldUseOfflineMode) {
-        // Offline mode - use localStorage only
-        console.log('Registering user in offline mode');
-        setOfflineMode(true);
-        
-        const existingUsers = JSON.parse(localStorage.getItem('mylist_offline_users') || '{}');
-        
-        if (existingUsers[username]) {
-          throw new Error('Username already exists');
+      // Check if user already exists locally or on backend
+      const localUsers = JSON.parse(localStorage.getItem('mylist_offline_users') || '{}');
+      const localUserExists = !!localUsers[trimmedUsername];
+      
+      let backendUserExists = false;
+      let backendAvailable = false;
+      
+      // Try to check backend first (if available)
+      try {
+        if (!isMobileOrOffline()) {
+          const response = await fetch(`${API_BASE_URL}/auth/check-username`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ username: trimmedUsername }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            backendAvailable = true;
+            backendUserExists = data.exists;
+          }
         }
-        
-        // Create new user data
-        const userData = {
-          username: username.trim(),
-          todo: [],
-          bucket: [],
-          travel: [],
-          media: [],
-          music: [],
-          books: [],
-          createdAt: new Date().toISOString()
-        };
-        
-        // Save to offline storage
-        existingUsers[username] = userData;
-        localStorage.setItem('mylist_offline_users', JSON.stringify(existingUsers));
-        
-        setUser(userData);
-        return { success: true, message: `Account created successfully! Welcome to myLIST, ${username}! (Offline mode)` };
+      } catch (backendError) {
+        console.log('Backend not available for registration, using offline mode');
+        backendAvailable = false;
       }
-
-      // Online mode - try backend
-      const response = await fetch(`${API_BASE_URL}/auth/create-user`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Registration failed');
+      
+      // Check if user already exists anywhere
+      if (localUserExists || backendUserExists) {
+        throw new Error('Username already exists. Please choose a different username.');
       }
-
+      
+      // Create new user data
       const userData = {
-        username: username.trim(),
-        ...data.userData
+        username: trimmedUsername,
+        todo: [],
+        bucket: [],
+        travel: [],
+        media: [],
+        music: [],
+        books: [],
+        createdAt: new Date().toISOString(),
+        lastModified: new Date().toISOString()
       };
+      
+      // Save locally first (always)
+      localUsers[trimmedUsername] = userData;
+      localStorage.setItem('mylist_offline_users', JSON.stringify(localUsers));
+      
+      // Try to create on backend if available
+      if (backendAvailable) {
+        try {
+          const response = await fetch(`${API_BASE_URL}/auth/create-user`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ username: trimmedUsername }),
+          });
+
+          if (response.ok) {
+            const backendData = await response.json();
+            // Merge any additional data from backend
+            const mergedUserData = {
+              ...userData,
+              ...backendData.userData
+            };
+            
+            // Update local storage with merged data
+            localUsers[trimmedUsername] = mergedUserData;
+            localStorage.setItem('mylist_offline_users', JSON.stringify(localUsers));
+            
+            setUser(mergedUserData);
+            setOfflineMode(false);
+            return { success: true, message: `Account created successfully! Welcome to myLIST, ${trimmedUsername}!` };
+          }
+        } catch (backendError) {
+          console.error('Backend registration failed, using offline mode:', backendError);
+        }
+      }
+      
+      // Fallback to offline mode
+      setOfflineMode(true);
       setUser(userData);
-      return { success: true, message: data.message };
+      
+      const modeMessage = backendAvailable ? '' : ' (Offline mode)';
+      return { success: true, message: `Account created successfully! Welcome to myLIST, ${trimmedUsername}!${modeMessage}` };
+      
     } catch (error) {
       console.error('Registration error:', error);
-      
-      // If backend fails, fall back to offline mode
-      if (!offlineMode) {
-        console.log('Backend unavailable for registration, switching to offline mode');
-        setOfflineMode(true);
-        
-        const existingUsers = JSON.parse(localStorage.getItem('mylist_offline_users') || '{}');
-        
-        if (existingUsers[username]) {
-          throw new Error('Username already exists');
-        }
-        
-        const userData = {
-          username: username.trim(),
-          todo: [],
-          bucket: [],
-          travel: [],
-          media: [],
-          music: [],
-          books: [],
-          createdAt: new Date().toISOString()
-        };
-        
-        existingUsers[username] = userData;
-        localStorage.setItem('mylist_offline_users', JSON.stringify(existingUsers));
-        
-        setUser(userData);
-        return { success: true, message: `Account created successfully! Welcome to myLIST, ${username}! (Offline mode)` };
-      }
-      
-      throw error;
+      return { success: false, message: error.message || 'Registration failed' };
     }
   };
 
