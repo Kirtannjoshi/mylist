@@ -270,17 +270,17 @@ export const AuthProvider = ({ children }) => {
     // If in offline mode, just save to localStorage
     if (offlineMode || isMobileOrOffline()) {
       console.log('Syncing data in offline mode');
-      
+      const key = (user.username || '').toLowerCase();
       const existingUsers = JSON.parse(localStorage.getItem('mylist_offline_users') || '{}');
-      existingUsers[user.username] = {
-        username: user.username,
+      existingUsers[key] = {
+        username: key,
         ...userData,
         lastModified: new Date().toISOString()
       };
       localStorage.setItem('mylist_offline_users', JSON.stringify(existingUsers));
       
       const updatedUser = {
-        username: user.username,
+        username: key,
         ...userData
       };
       setUser(updatedUser);
@@ -295,7 +295,7 @@ export const AuthProvider = ({ children }) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          username: user.username,
+          username: (user.username || '').toLowerCase(),
           userData: userData
         }),
       });
@@ -305,7 +305,7 @@ export const AuthProvider = ({ children }) => {
       if (response.ok) {
         // Update local user state with the new data
         const updatedUser = {
-          username: user.username,
+          username: (user.username || '').toLowerCase(),
           ...userData
         };
         setUser(updatedUser);
@@ -321,15 +321,16 @@ export const AuthProvider = ({ children }) => {
       setOfflineMode(true);
       
       const existingUsers = JSON.parse(localStorage.getItem('mylist_offline_users') || '{}');
-      existingUsers[user.username] = {
-        username: user.username,
+      const key = (user.username || '').toLowerCase();
+      existingUsers[key] = {
+        username: key,
         ...userData,
         lastModified: new Date().toISOString()
       };
       localStorage.setItem('mylist_offline_users', JSON.stringify(existingUsers));
       
       const updatedUser = {
-        username: user.username,
+        username: key,
         ...userData
       };
       setUser(updatedUser);
@@ -352,8 +353,9 @@ export const AuthProvider = ({ children }) => {
         console.log('Updating user data in offline mode');
         
         const existingUsers = JSON.parse(localStorage.getItem('mylist_offline_users') || '{}');
-        existingUsers[user.username] = {
-          username: user.username,
+        const key = (user.username || '').toLowerCase();
+        existingUsers[key] = {
+          username: key,
           ...updatedUser,
           lastModified: new Date().toISOString()
         };
@@ -379,11 +381,12 @@ export const AuthProvider = ({ children }) => {
       console.log('Loading user data in offline mode');
       
       const existingUsers = JSON.parse(localStorage.getItem('mylist_offline_users') || '{}');
-      const userData = existingUsers[user.username];
+      const key = (user.username || '').toLowerCase();
+      const userData = existingUsers[key];
       
       if (userData) {
         const fullUserData = {
-          username: user.username,
+          username: key,
           ...userData
         };
         setUser(fullUserData);
@@ -395,7 +398,7 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/user/${user.username}`);
+  const response = await fetch(`${API_BASE_URL}/user/${(user.username || '').toLowerCase()}`);
       const data = await response.json();
 
       if (!response.ok) {
@@ -403,7 +406,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       const userData = {
-        username: user.username,
+  username: (user.username || '').toLowerCase(),
         ...data.userData
       };
       setUser(userData);
@@ -415,12 +418,13 @@ export const AuthProvider = ({ children }) => {
       console.log('Backend load failed, switching to offline mode');
       setOfflineMode(true);
       
-      const existingUsers = JSON.parse(localStorage.getItem('mylist_offline_users') || '{}');
-      const userData = existingUsers[user.username];
+    const existingUsers = JSON.parse(localStorage.getItem('mylist_offline_users') || '{}');
+    const key = (user.username || '').toLowerCase();
+    const userData = existingUsers[key];
       
       if (userData) {
         const fullUserData = {
-          username: user.username,
+      username: key,
           ...userData
         };
         setUser(fullUserData);

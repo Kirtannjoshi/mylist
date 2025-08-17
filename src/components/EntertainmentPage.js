@@ -152,6 +152,7 @@ export default function EntertainmentPage({
     statusCategories.forEach(cat => {
       counts[cat.key] = savedMedia.filter(m => m.status === cat.key).length;
     });
+  counts['all'] = savedMedia.length;
     return counts;
   };
 
@@ -559,7 +560,10 @@ export default function EntertainmentPage({
                 }}
               >
                 {(() => {
-                  const filteredMedia = savedMedia.filter((m) => m.status === statusFilter).slice(0, visibleCount);
+                  const filteredMedia = (statusFilter === 'all' 
+                    ? savedMedia 
+                    : savedMedia.filter((m) => m.status === statusFilter)
+                  ).slice(0, visibleCount);
                   const visibleIds = filteredMedia.map((m) => (m.imdbID||m.title));
                   
                   // Show empty state if no content
@@ -649,10 +653,16 @@ export default function EntertainmentPage({
                 })()}
               </DndContext>
               
-              {savedMedia.filter((m) => m.status === statusFilter).length > visibleCount && (
+              {(statusFilter === 'all' 
+                ? savedMedia.length 
+                : savedMedia.filter((m) => m.status === statusFilter).length
+               ) > visibleCount && (
                 <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
                   <Button variant="outlined" onClick={onShowMore}>
-                    Show More ({savedMedia.filter((m) => m.status === statusFilter).length - visibleCount} remaining)
+                    {(() => { 
+                      const total = statusFilter === 'all' ? savedMedia.length : savedMedia.filter((m) => m.status === statusFilter).length; 
+                      return `Show More (${total - visibleCount} remaining)`; 
+                    })()}
                   </Button>
                 </Box>
               )}

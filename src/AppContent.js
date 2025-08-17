@@ -74,7 +74,7 @@ function SortableItem({ children, id }) {
 }
 
 export default function AppContent() {
-  const { user, updateUserData } = useAuth();
+  const { user, updateUserData, syncData } = useAuth();
   const [active, setActive] = React.useState('home');
   const [sidebarExpanded, setSidebarExpanded] = React.useState(false);
   const [mobileMoreMenuAnchor, setMobileMoreMenuAnchor] = React.useState(null);
@@ -99,15 +99,17 @@ export default function AppContent() {
     { key: 'books', text: 'Books', icon: <BookIcon /> }
   ];
 
-  // Use user data from auth context
-  const data = user || {
-    todo: [],
-    bucket: [],
-    travel: [],
-    media: [],
-    music: [],
-    books: [],
-  };
+  // Use user data from auth context (memoized to avoid changing deps every render)
+  const data = React.useMemo(() => (
+    user || {
+      todo: [],
+      bucket: [],
+      travel: [],
+      media: [],
+      music: [],
+      books: [],
+    }
+  ), [user]);
 
   // Debug logging
   React.useEffect(() => {
@@ -115,7 +117,7 @@ export default function AppContent() {
     console.log('AppContent - data:', data);
     console.log('AppContent - data.media:', data.media);
     console.log('AppContent - data.media length:', data.media?.length || 0);
-  }, [user, data]);
+  }, [data, user]);
 
   const [statusFilter, setStatusFilter] = React.useState('all');
   const [visibleCount, setVisibleCount] = React.useState(24);
@@ -330,7 +332,10 @@ export default function AppContent() {
               ) : active === 'books' ? (
                 <BooksComingSoon />
               ) : active === 'profile' ? (
-                <ProfilePage />
+                <ProfilePage 
+                  userData={data}
+                  onSyncData={(payload) => syncData(payload)}
+                />
               ) : active === 'todo' ? (
                 <TaskList
                   title="To-Do"
